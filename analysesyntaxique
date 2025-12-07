@@ -1,4 +1,5 @@
-package projetcompilation;import java.util.Arrays;
+package projetcompilation;
+import java.util.Arrays;
 
 public class analysesyntaxique {
 
@@ -15,27 +16,28 @@ public class analysesyntaxique {
         position++;
     }
 
-    static void Z() { // S → DECLS INSTS
-    if (courant().equals("int") || courant().equals("float") || courant().equals("char")) {
-        DECLS();
+    static void Z() {
+        if (courant().equals("int") || courant().equals("float") || courant().equals("char")) {
+            DECLS();
+        }
+        INSTS();
+        
+        // Résumé final
+       
+        if (!erreur && courant().equals("#")) {
+            System.out.println("✅ Chaine correcte - Aucune erreur detectee");
+        } else {
+            System.out.println("❌ Chaine incorrecte - Des erreurs ont ete detectees");
+        }
+      
     }
-    INSTS(); // Analyse toutes les instructions après les déclarations
-    if (courant().equals("#") && !erreur) {
-        System.out.println("Chaîne correcte");
-    } else if (!erreur) {
-        System.out.println("Chaîne incorrecte à '" + courant() + "'");
-    }
-}
 
-
-    // DECLS → DeclVar DECLS | ε
     static void DECLS() {
         while (courant().equals("int") || courant().equals("float") || courant().equals("char")) {
             DeclVar();
         }
     }
 
-    // DeclVar → Type Ident = EXPR ; | Type Ident ;
     static void DeclVar() {
         Type();
         Ident();
@@ -43,13 +45,27 @@ public class analysesyntaxique {
             ts();
             EXPR();
         }
-        if (courant().equals(";")) ts();
-        else erreur("Point-virgule attendu après déclaration");
+        if (courant().equals(";")) {
+            ts();
+        } else {
+            erreur("Point-virgule attendu après déclaration");
+            // Ne pas s'arrêter, juste signaler l'erreur
+            if (!courant().equals("}") && !courant().equals("#")) {
+                // Continue sans consommer si c'est un début d'instruction valide
+                if (!estDebutInstruction()) {
+                    recuperer();
+                }
+            }
+        }
     }
 
     static void Type() {
-        if (courant().equals("int") || courant().equals("float") || courant().equals("char")) ts();
-        else erreur("Type attendu (int, float, char)");
+        if (courant().equals("int") || courant().equals("float") || courant().equals("char")) {
+            ts();
+        } else {
+            erreur("Type attendu (int, float, char)");
+            ts(); // ← AJOUT : consomme le token invalide
+        }
     }
 
     static void WhileInstr() {
@@ -61,12 +77,24 @@ public class analysesyntaxique {
                 if (courant().equals(")")) {
                     ts();
                     Block();
-                } else erreur("Parenthèse fermante ')' attendue");
-            } else erreur("Parenthèse ouvrante '(' attendue");
-        } else erreur("'while' attendu");
+                } else {
+                    erreur("Parenthèse fermante ')' attendue");
+                    recuperer(); // ← AJOUT
+                }
+            } else {
+                erreur("Parenthèse ouvrante '(' attendue");
+                recuperer(); // ← AJOUT
+            }
+        } else {
+            erreur("'while' attendu");
+            ts(); // ← AJOUT
+        }
     }
 
-    static void COND() { COND_SIMPLE(); CONDprime(); }
+    static void COND() { 
+        COND_SIMPLE(); 
+        CONDprime(); 
+    }
 
     static void CONDprime() {
         while (courant().equals("&&") || courant().equals("||")) {
@@ -75,20 +103,35 @@ public class analysesyntaxique {
         }
     }
 
-    static void COND_SIMPLE() { EXPR(); RELOP(); EXPR(); }
+    static void COND_SIMPLE() { 
+        EXPR(); 
+        RELOP(); 
+        EXPR(); 
+    }
 
     static void RELOP() {
-        if (Arrays.asList("<", ">", "<=", ">=", "==", "!=").contains(courant())) ts();
-        else erreur("Opérateur de comparaison attendu");
+        if (Arrays.asList("<", ">", "<=", ">=", "==", "!=").contains(courant())) {
+            ts();
+        } else {
+            erreur("Opérateur de comparaison attendu");
+            ts(); // ← AJOUT : consomme le token invalide
+        }
     }
 
     static void Block() {
         if (courant().equals("{")) {
             ts();
             INSTS();
-            if (courant().equals("}")) ts();
-            else erreur("Accolade fermante '}' attendue");
-        } else erreur("Accolade ouvrante '{' attendue");
+            if (courant().equals("}")) {
+                ts();
+            } else {
+                erreur("Accolade fermante '}' attendue");
+                recuperer(); // ← AJOUT
+            }
+        } else {
+            erreur("Accolade ouvrante '{' attendue");
+            recuperer(); // ← AJOUT
+        }
     }
 
     static void INSTS() {
@@ -98,24 +141,60 @@ public class analysesyntaxique {
     }
 
     static void INST() {
-        if (courant().equals("while")) WhileInstr();
-        else if (courant().equals("int") || courant().equals("float") || courant().equals("char")) DeclVar();
-        else if (courant().equals("scanf")) ScanfInstr();
-        else if (courant().equals("printf")) PrintfInstr();
-        else if (Character.isLetter(courant().charAt(0))) {
+        if (courant().equals("while")) {
+            WhileInstr();
+        } else if (courant().equals("int") || courant().equals("float") || courant().equals("char")) {
+            DeclVar();
+        } else if (courant().equals("scanf")) {
+            ScanfInstr();
+        } else if (courant().equals("printf")) {
+            PrintfInstr();
+        } else if (Character.isLetter(courant().charAt(0))) {
             String ident = courant();
             ts();
             if (courant().equals("=")) {
                 ts();
                 EXPR();
-                if (courant().equals(";")) ts();
-                else erreur("Point-virgule attendu après affectation");
+                if (courant().equals(";")) {
+                    ts();
+                } else {
+                    erreur("Point-virgule attendu après affectation");
+                    // Continue sans bloquer
+                    if (!estDebutInstruction() && !courant().equals("}") && !courant().equals("#")) {
+                        recuperer();
+                    }
+                }
             } else if (courant().equals("++") || courant().equals("--")) {
                 ts();
-                if (courant().equals(";")) ts();
-                else erreur("Point-virgule attendu après incrémentation");
-            } else erreur("Opération attendue après identificateur");
-        } else erreur("Instruction invalide");
+                if (courant().equals(";")) {
+                    ts();
+                } else {
+                    erreur("Point-virgule attendu après incrémentation");
+                    // Continue sans bloquer
+                    if (!estDebutInstruction() && !courant().equals("}") && !courant().equals("#")) {
+                        recuperer();
+                    }
+                }
+            } else {
+                erreur("Opération attendue après identificateur");
+                recuperer();
+            }
+        } else if (courant().equals("--") || courant().equals("++")) {
+            // Gestion de --c ou ++c seul
+            ts();
+            Ident();
+            if (courant().equals(";")) {
+                ts();
+            } else {
+                erreur("Point-virgule attendu après incrémentation");
+                if (!estDebutInstruction() && !courant().equals("}") && !courant().equals("#")) {
+                    recuperer();
+                }
+            }
+        } else {
+            erreur("Instruction invalide");
+            ts(); // Consomme le token invalide pour éviter boucle infinie
+        }
     }
 
     static void EXPR() {
@@ -140,41 +219,95 @@ public class analysesyntaxique {
             if (courant().equals("++") || courant().equals("--")) ts();
         } else if (Character.isDigit(courant().charAt(0))) {
             Nombre();
-        } else if (courant().startsWith("(")) {
+        } else if (courant().equals("(")) {
             ts();
             EXPR();
-            if (courant().equals(")")) ts();
-            else erreur("Parenthèse fermante ')' attendue");
+            if (courant().equals(")")) {
+                ts();
+            } else {
+                erreur("Parenthèse fermante ')' attendue");
+                recuperer(); // ← AJOUT
+            }
         } else if (courant().equals("++") || courant().equals("--")) {
             ts();
             Ident();
-        } else erreur("Facteur invalide");
+        } else {
+            erreur("Facteur invalide");
+            ts(); // ← AJOUT : consomme le token invalide
+        }
     }
 
     static void Ident() {
-        if (Character.isLetter(courant().charAt(0))) ts();
-        else erreur("Identificateur attendu");
+        if (Character.isLetter(courant().charAt(0))) {
+            ts();
+        } else {
+            erreur("Identificateur attendu");
+            ts(); // ← AJOUT : consomme le token invalide
+        }
     }
 
     static void Nombre() {
-        if (Character.isDigit(courant().charAt(0))) ts();
-        else erreur("Nombre attendu");
+        if (Character.isDigit(courant().charAt(0))) {
+            ts();
+        } else {
+            erreur("Nombre attendu");
+            ts(); // ← AJOUT : consomme le token invalide
+        }
     }
 
     static void erreur(String msg) {
-        System.out.println("Erreur : " + msg + " à '" + courant() + "'");
+        System.out.println("❌ Erreur : " + msg + " à '" + courant() + "'");
         erreur = true;
+        // NE PAS sortir, continuer l'analyse
+    }
+
+    // Fonction pour vérifier si c'est un début d'instruction
+    static boolean estDebutInstruction() {
+        return courant().equals("while") || 
+               courant().equals("int") || 
+               courant().equals("float") || 
+               courant().equals("char") ||
+               courant().equals("scanf") ||
+               courant().equals("printf") ||
+               courant().equals("{") ||
+               courant().equals("}") ||
+               Character.isLetter(courant().charAt(0));
+    }
+
+    // ← NOUVELLE FONCTION : Récupération d'erreur améliorée
+    static void recuperer() {
+        // Si on est déjà sur un point de synchronisation, ne rien faire
+        if (courant().equals(";") || courant().equals("}") || 
+            courant().equals("{") || courant().equals("#")) {
+            if (courant().equals(";")) ts();
+            return;
+        }
+        
+        // Sinon, avance jusqu'au prochain point de synchronisation
+        while (!courant().equals(";") && 
+               !courant().equals("}") && 
+               !courant().equals("{") && 
+               !courant().equals("#") &&
+               !estDebutInstruction()) {
+            ts();
+        }
+        
+        // Consomme le point-virgule si trouvé
+        if (courant().equals(";")) {
+            ts();
+        }
     }
 
     // --- Gestion scanf et printf ---
     static void ScanfInstr() {
-        ts(); // consommer "scanf"
+        ts();
         if (courant().equals("(")) {
             ts();
             if (courant().startsWith("\"") && courant().endsWith("\"")) {
                 String format = courant().substring(1, courant().length()-1);
-                if (!format.equals("%d") && !format.equals("%f") && !format.equals("%c"))
+                if (!format.equals("%d") && !format.equals("%f") && !format.equals("%c")) {
                     erreur("Format attendu (%d, %f, %c) dans scanf");
+                }
                 ts();
                 if (courant().equals(",")) {
                     ts();
@@ -183,32 +316,63 @@ public class analysesyntaxique {
                         Ident();
                         if (courant().equals(")")) {
                             ts();
-                            if (courant().equals(";")) ts();
-                            else erreur("Point-virgule attendu après scanf");
-                        } else erreur("Parenthèse fermante ')' attendue après scanf");
-                    } else erreur("'&' attendu avant identificateur dans scanf");
-                } else erreur("Virgule attendue après le format dans scanf");
-            } else erreur("Format attendu entre guillemets dans scanf");
-        } else erreur("Parenthèse ouvrante '(' attendue après scanf");
+                            if (courant().equals(";")) {
+                                ts();
+                            } else {
+                                erreur("Point-virgule attendu après scanf");
+                                recuperer(); // ← AJOUT
+                            }
+                        } else {
+                            erreur("Parenthèse fermante ')' attendue après scanf");
+                            recuperer(); // ← AJOUT
+                        }
+                    } else {
+                        erreur("'&' attendu avant identificateur dans scanf");
+                        recuperer(); // ← AJOUT
+                    }
+                } else {
+                    erreur("Virgule attendue après le format dans scanf");
+                    recuperer(); // ← AJOUT
+                }
+            } else {
+                erreur("Format attendu entre guillemets dans scanf");
+                recuperer(); // ← AJOUT
+            }
+        } else {
+            erreur("Parenthèse ouvrante '(' attendue après scanf");
+            recuperer(); // ← AJOUT
+        }
     }
 
     static void PrintfInstr() {
-        ts(); // consommer "printf"
+        ts();
         if (courant().equals("(")) {
             ts();
             if (courant().startsWith("\"") && courant().endsWith("\"")) {
-                ts(); // consommer la chaîne
+                ts();
                 if (courant().equals(",")) {
                     ts();
                     EXPR();
                 }
                 if (courant().equals(")")) {
                     ts();
-                    if (courant().equals(";")) ts();
-                    else erreur("Point-virgule attendu après printf");
-                } else erreur("Parenthèse fermante ')' attendue après printf");
-            } else erreur("Chaîne attendue dans printf");
-        } else erreur("Parenthèse ouvrante '(' attendue après printf");
+                    if (courant().equals(";")) {
+                        ts();
+                    } else {
+                        erreur("Point-virgule attendu après printf");
+                        recuperer(); // ← AJOUT
+                    }
+                } else {
+                    erreur("Parenthèse fermante ')' attendue après printf");
+                    recuperer(); // ← AJOUT
+                }
+            } else {
+                erreur("Chaîne attendue dans printf");
+                recuperer(); // ← AJOUT
+            }
+        } else {
+            erreur("Parenthèse ouvrante '(' attendue après printf");
+            recuperer(); // ← AJOUT
+        }
     }
-
 }
