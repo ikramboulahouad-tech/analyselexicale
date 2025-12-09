@@ -1,12 +1,10 @@
-package projetcompilation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
 public class analyselexicale {
 
-    // Types de jetons
-    enum TokenType { IDENT, KEYWORD, NUMBER, OP, DELIM, DOT, NL, ERROR, STRING }
+    enum TokenType { IDENT, KEYWORD, NUMBER, OP, DELIM, STRING, PREPROCESSOR, ERROR }
 
     static class Token {
         TokenType type;
@@ -26,9 +24,8 @@ public class analyselexicale {
                 case NUMBER: return "Nombre";
                 case OP: return "Opérateur";
                 case DELIM: return "Délimiteur";
-                case DOT: return "Point";
-                case NL: return "Saut de ligne";
                 case STRING: return "Chaîne";
+                case PREPROCESSOR: return "Directive préprocesseur";
                 case ERROR: return "Erreur lexicale";
                 default: return "Inconnu";
             }
@@ -41,20 +38,17 @@ public class analyselexicale {
     }
 
     static final int FIN = -1;
-
-    // Colonnes DFSA
     static final int L = 0, UNDERSCORE = 1, D = 2, SLASH = 3, PLUS = 4, MINUS = 5,
             STAR = 6, PERCENT = 7, LT = 8, GT = 9, EQ = 10, EXCL = 11,
             AMP = 12, PIPE = 13, DEL = 14, WS = 15, DOT = 16, NL = 17, AUTRE = 18;
 
-    // Matrice de transition (DFSA)
     static int[][] M = {
             {  2,  2,  3,  4,  5,  6,  7,  7,  8,  9, 10, 11, 12, 13, 14,  1, 15,  1, 16 },
             {  2,  2,  2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
             { -1, -1,  3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 17, -1, -1 },
             { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
-            { -1, -1, -1, -1,  7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
-            { -1, -1, -1, -1, -1,  7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
+            { -1, -1, -1, -1,  7, -1, -1, -1, -1, -1,  7, -1, -1, -1, -1, -1, -1, -1, -1 },
+            { -1, -1, -1, -1, -1,  7, -1, -1, -1, -1,  7, -1, -1, -1, -1, -1, -1, -1, -1 },
             { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
             { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  7, -1, -1, -1, -1, -1, -1, -1, -1 },
             { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  7, -1, -1, -1, -1, -1, -1, -1, -1 },
@@ -65,10 +59,9 @@ public class analyselexicale {
             { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
             { -1, -1, 17, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
             { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
-            { -1, -1, 17, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 }
+            { -1, -1, 17, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
     };
 
-    // Catégorisation d’un caractère
     static int col(char c) {
         if (Character.isLetter(c)) return L;
         if (c == '_') return UNDERSCORE;
@@ -91,51 +84,56 @@ public class analyselexicale {
         return AUTRE;
     }
 
-    // Reconnaissance des mots-clés
     static String motCle(String lexeme) {
         String l = lexeme.trim();
         String lower = l.toLowerCase();
         if (lower.equals("boulahouad")) return "CUSTOM_NOM";
         if (lower.equals("ikram")) return "CUSTOM_PRENOM";
         switch (l) {
-            case "int": return "INT";
-            case "float": return "FLOAT";
-            case "char": return "CHAR";
-            case "double": return "DOUBLE";
-            case "if": return "IF";
-            case "else": return "ELSE";
-            case "while": return "WHILE";
-            case "for": return "FOR";
-            case "do": return "DO";
-            case "return": return "RETURN";
-            case "switch": return "SWITCH";
-            case "case": return "CASE";
-            case "break": return "BREAK";
-            case "continue": return "CONTINUE";
-            case "printf": return "PRINTF";
-            case "scanf": return "SCANF";
-            case "void": return "VOID";
+            case "int": case "float": case "char": case "double": case "void":
+                return "TYPE";
+            case "if": case "else": case "while": case "for": case "do":
+            case "return": case "break": case "continue":
+            case "printf": case "scanf": case "main":
+                return "KEYWORD";
             default: return "IDENTIFIANT";
         }
     }
 
-    // Scanne la chaîne en tokens
     public static List<Token> scan(String input) {
         List<Token> tokens = new ArrayList<>();
         int i = 0;
+
         while (i < input.length()) {
             char c = input.charAt(i);
 
-            // --- Gestion des chaînes "..." ---
+            // #include ou #define
+            if (c == '#') {
+                StringBuilder prep = new StringBuilder();
+                prep.append(c);
+                i++;
+                while (i < input.length() && input.charAt(i) != '\n') {
+                    prep.append(input.charAt(i));
+                    i++;
+                }
+                tokens.add(new Token(TokenType.PREPROCESSOR, prep.toString().trim(), false));
+                continue;
+            }
+
+            // Chaînes "..."
             if (c == '"') {
                 StringBuilder str = new StringBuilder();
                 str.append(c);
                 i++;
                 while (i < input.length() && input.charAt(i) != '"') {
+                    if (input.charAt(i) == '\\' && i + 1 < input.length()) {
+                        str.append(input.charAt(i));
+                        i++;
+                    }
                     str.append(input.charAt(i));
                     i++;
                 }
-                if (i < input.length()) { // consommer le guillemet fermant
+                if (i < input.length()) {
                     str.append('"');
                     i++;
                 }
@@ -143,26 +141,43 @@ public class analyselexicale {
                 continue;
             }
 
-            // --- Gestion des formats %d, %f, %c ---
-            if (c == '%' && i + 1 < input.length()) {
-                String fmt = "%" + input.charAt(i + 1);
-                tokens.add(new Token(TokenType.OP, fmt, false));
-                i += 2;
+            // Caractères '<' et '>' dans #include
+            if ((c == '<' || c == '>') && !tokens.isEmpty() && 
+                tokens.get(tokens.size()-1).type == TokenType.PREPROCESSOR) {
+                StringBuilder header = new StringBuilder();
+                header.append(c);
+                i++;
+                while (i < input.length() && input.charAt(i) != '>' && input.charAt(i) != '\n') {
+                    header.append(input.charAt(i));
+                    i++;
+                }
+                if (i < input.length() && input.charAt(i) == '>') {
+                    header.append('>');
+                    i++;
+                }
+                tokens.add(new Token(TokenType.STRING, header.toString(), false));
                 continue;
             }
 
-            // --- DFSA classique ---
+            // Automate classique
             int etat = 1;
             StringBuilder lex = new StringBuilder();
+
             while (i < input.length() && etat != FIN) {
                 c = input.charAt(i);
                 int col_index = col(c);
                 int newState = M[etat - 1][col_index];
+
                 if (newState == FIN) break;
-                if (col_index != WS && col_index != NL) lex.append(c);
+
+                if (col_index != WS && col_index != NL) {
+                    lex.append(c);
+                }
+
                 etat = newState;
                 i++;
             }
+
             String lexeme = lex.toString().trim();
             if (lexeme.isEmpty()) {
                 if (i < input.length()) i++;
@@ -179,12 +194,25 @@ public class analyselexicale {
                     tokens.add(new Token(type, lexeme, mc.startsWith("CUSTOM")));
                     break;
                 }
-                case 3: case 17: type = TokenType.NUMBER; tokens.add(new Token(type, lexeme, false)); break;
-                case 4: case 5: case 6: case 7: case 8: case 9: case 10: case 11: case 12: case 13: type = TokenType.OP; tokens.add(new Token(type, lexeme, false)); break;
-                case 14: type = TokenType.DELIM; tokens.add(new Token(type, lexeme, false)); break;
-                default: type = TokenType.ERROR; tokens.add(new Token(type, lexeme, false)); break;
+                case 3: case 17:
+                    type = TokenType.NUMBER;
+                    tokens.add(new Token(type, lexeme, false));
+                    break;
+                case 4: case 5: case 6: case 7: case 8: case 9: case 10: case 11: case 12: case 13:
+                    type = TokenType.OP;
+                    tokens.add(new Token(type, lexeme, false));
+                    break;
+                case 14:
+                    type = TokenType.DELIM;
+                    tokens.add(new Token(type, lexeme, false));
+                    break;
+                default:
+                    type = TokenType.ERROR;
+                    tokens.add(new Token(type, lexeme, false));
+                    break;
             }
         }
+
         return tokens;
     }
 
@@ -192,21 +220,42 @@ public class analyselexicale {
         Scanner sc = new Scanner(System.in);
         StringBuilder codeComplet = new StringBuilder();
 
+        System.out.println("=== COMPILATEUR C - PROGRAMME COMPLET ===");
         System.out.println("Entrez le code (tapez 'FIN' pour terminer) :\n");
+
         while (true) {
             String ligne = sc.nextLine();
             if (ligne.equals("FIN")) break;
             codeComplet.append(ligne).append("\n");
         }
 
+        // ANALYSE LEXICALE
         List<Token> tokensList = scan(codeComplet.toString());
-        System.out.println("Lexèmes reconnus :");
-        for (Token tok : tokensList) System.out.println(tok);
+        System.out.println("\n=== LEXÈMES RECONNUS ===");
+        for (Token tok : tokensList) {
+            System.out.println(tok);
+        }
 
-        // Initialisation pour l'analyse syntaxique
-        analysesyntaxique.tokens = tokensList.stream().map(t -> t.lexeme).toArray(String[]::new);
+        // ANALYSE SYNTAXIQUE
+        System.out.println("\n=== ANALYSE SYNTAXIQUE ===");
+        
+        // Conversion des tokens pour l'analyseur syntaxique
+        List<String> lexemesList = new ArrayList<>();
+        for (Token tok : tokensList) {
+            // On ignore les directives préprocesseur pour l'analyse syntaxique
+            if (tok.type != TokenType.PREPROCESSOR) {
+                lexemesList.add(tok.lexeme);
+            }
+        }
+        
+        // Initialisation de l'analyseur syntaxique
+        analysesyntaxique.tokens = lexemesList.toArray(new String[0]);
         analysesyntaxique.position = 0;
         analysesyntaxique.erreur = false;
+        
+        // Lancement de l'analyse
         analysesyntaxique.Z();
+
+        sc.close();
     }
 }
